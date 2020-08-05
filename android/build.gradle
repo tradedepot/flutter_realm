@@ -12,7 +12,7 @@ buildscript {
 
     dependencies {
         classpath 'com.android.tools.build:gradle:3.4.2'
-        classpath "io.realm:realm-gradle-plugin:7.0.0-beta-SNAPSHOT"
+        classpath "io.realm:realm-gradle-plugin:10.0.0-BETA.5"
     }
 }
 
