@@ -1,4 +1,4 @@
-package com.it_nomads.flutter_realm;
+package co.tradedepot.flutter_realm;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,17 +18,19 @@ import io.realm.RealmFieldType;
 import io.realm.RealmList;
 import io.realm.RealmQuery;
 import io.realm.RealmResults;
+import io.realm.mongodb.App;
+import io.realm.mongodb.AppConfiguration;
 
 class FlutterRealm {
     private final String realmId;
     private DynamicRealm realm;
+    private App app;
     private HashMap<String, RealmResults> subscriptions = new HashMap<>();
     private final MethodChannel channel;
 
     FlutterRealm(MethodChannel channel, String realmId, Map arguments) {
         this.channel = channel;
         this.realmId = realmId;
-
         RealmConfiguration.Builder builder = new RealmConfiguration.Builder().modules(Realm.getDefaultModule());
 
         String inMemoryIdentifier = (String) arguments.get("inMemoryIdentifier");

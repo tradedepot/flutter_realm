@@ -3,17 +3,19 @@ part of flutter_realm;
 final _uuid = Uuid();
 
 class Realm {
-  final _channel = MethodChannelTransport(_uuid.v4());
+  final _channel = MethodChannelRealm(_uuid.v4());
   final _unsubscribing = Set<String>();
-
+  static bool _initialized = false;
   String get id => _channel.realmId;
 
   Realm._() {
     _channel.methodCallStream.listen(_handleMethodCall);
   }
 
-  static Future<Realm> open(Configuration configuration) async {
+  static Future<Realm> initialize(Configuration configuration) async {
     final realm = Realm._();
+    if (_initialized) return realm;
+    _initialized = true;
     await realm._invokeMethod('initialize', configuration.toMap());
     return realm;
   }
@@ -67,7 +69,7 @@ class Realm {
 
   Future<void> deleteAllObjects() => _channel.invokeMethod('deleteAllObjects');
 
-  static Future<void> reset() => MethodChannelTransport.reset();
+  static Future<void> reset() => MethodChannelRealm.reset();
 
   void close() {
     final ids = _subscriptions.keys.toList();
@@ -218,10 +220,11 @@ class Query {
 
 class Configuration {
   final String inMemoryIdentifier;
+  final String appId;
+  const Configuration({this.inMemoryIdentifier, this.appId});
 
-  const Configuration({this.inMemoryIdentifier});
-
-  Map<String, String> toMap() => {'inMemoryIdentifier': inMemoryIdentifier};
+  Map<String, String> toMap() =>
+      {'inMemoryIdentifier': inMemoryIdentifier, 'appId': appId};
 
   static const Configuration defaultConfiguration = const Configuration();
 }

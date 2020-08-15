@@ -2,13 +2,13 @@ part of flutter_realm;
 
 final MethodChannel _realmMethodChannel =
     const MethodChannel('plugins.it_nomads.com/flutter_realm')
-      ..setMethodCallHandler(MethodChannelTransport._handleMethodCall);
+      ..setMethodCallHandler(MethodChannelRealm._handleMethodCall);
 
-class MethodChannelTransport {
+class MethodChannelRealm {
   final String realmId;
   final MethodChannel _channel;
 
-  MethodChannelTransport(this.realmId, [MethodChannel channel])
+  MethodChannelRealm(this.realmId, [MethodChannel channel])
       : _channel = channel ?? _realmMethodChannel;
 
   Stream<MethodCall> get methodCallStream =>
