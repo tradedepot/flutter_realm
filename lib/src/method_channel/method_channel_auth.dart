@@ -10,7 +10,7 @@ class MethodChannelAuth {
       BaseMethodChannel._methodCallController.stream.where(_equalAppId);
 
   Future<T> invokeMethod<T>(String method, [Map arguments]) =>
-      _channel.invokeMethod<T>(method, _addAppId(arguments));
+      _baseChannel.invokeMethod<T>(method, _addAppId(arguments));
 
   Map _addAppId(Map arguments) {
     final map = (arguments ?? {});
@@ -20,5 +20,5 @@ class MethodChannelAuth {
 
   bool _equalAppId(MethodCall call) => call.arguments['appId'] == appId;
 
-  static Future<void> reset() => _channel.invokeMethod('reset');
+  static Future<void> reset() => _baseChannel.invokeMethod('reset');
 }

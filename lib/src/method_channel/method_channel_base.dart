@@ -1,6 +1,6 @@
 part of flutter_realm;
 
-final MethodChannel _channel =
+final MethodChannel _baseChannel =
     const MethodChannel('plugins.it_nomads.com/flutter_realm')
       ..setMethodCallHandler(BaseMethodChannel._handleMethodCall);
 
@@ -9,7 +9,6 @@ class BaseMethodChannel {
   static final _methodCallController = StreamController<MethodCall>.broadcast();
 
   static Future<dynamic> _handleMethodCall(MethodCall call) {
-    print("GOT METHOD CALL: $call");
     _methodCallController.add(call);
     return null;
   }

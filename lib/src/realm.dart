@@ -1,45 +1,37 @@
 part of flutter_realm;
 
-final _uuid = Uuid();
-
 class Realm {
-  final _channel = MethodChannelRealm(_uuid.v4());
-  final _unsubscribing = Set<String>();
-  static bool _initialized = false;
-  String get id => _channel.realmId;
-
-  Realm._() {
-    _channel.methodCallStream.listen(_handleMethodCall);
+  final _unSubscribing = Set<String>();
+  final String id;
+  bool _isDisposed = false;
+  MethodChannelRealm _channelRealm;
+  Realm._(this.id) {
+    _channelRealm = MethodChannelRealm(id);
+    _channelRealm.methodCallStream.listen(_handleMethodCall);
   }
 
-  static Future<Realm> initialize(Configuration configuration) async {
-    final realm = Realm._();
-    if (_initialized) return realm;
-    _initialized = true;
-    await realm._invokeMethod('initialize', configuration.toMap());
+  static Future<Realm> initRealm(RealmConfiguration configuration) async {
+    final realm = Realm._(configuration.realmId);
+    await realm._invokeMethod('initializeRealm', configuration.toMap());
     return realm;
   }
 
-  static Future<Realm> asyncOpenWithConfiguration({
-    @required String syncServerURL,
-    bool fullSynchronization = false,
+  static Future<Realm> asyncOpenWithRealmConfiguration({
+    @required String partitionValue,
   }) async {
-    final realm = Realm._();
+    final realm = Realm._(partitionValue);
     await realm._invokeMethod('asyncOpenWithConfiguration', {
-      'syncServerURL': syncServerURL,
-      'fullSynchronization': fullSynchronization,
+      'partitionValue': partitionValue,
     });
     return realm;
   }
 
-  static Future<Realm> syncOpenWithConfiguration({
-    @required String syncServerURL,
-    bool fullSynchronization = false,
+  static Future<Realm> syncOpenWithRealmConfiguration({
+    @required String partitionValue,
   }) async {
-    final realm = Realm._();
+    final realm = Realm._(partitionValue);
     await realm._invokeMethod('syncOpenWithConfiguration', {
-      'syncServerURL': syncServerURL,
-      'fullSynchronization': fullSynchronization,
+      'partitionValue': partitionValue,
     });
     return realm;
   }
@@ -48,7 +40,7 @@ class Realm {
     switch (call.method) {
       case 'onResultsChange':
         final subscriptionId = call.arguments['subscriptionId'];
-        if (_unsubscribing.contains(subscriptionId)) {
+        if (_unSubscribing.contains(subscriptionId)) {
           return;
         }
 
@@ -67,27 +59,32 @@ class Realm {
     }
   }
 
-  Future<void> deleteAllObjects() => _channel.invokeMethod('deleteAllObjects');
+  Future<void> deleteAllObjects() => _channelRealm.invokeMethod('deleteAllObjects');
 
-  static Future<void> reset() => MethodChannelRealm.reset();
+  Future<void> _dispose() => _channelRealm.invokeMethod('disposeRealm');
 
-  void close() {
+  Future<void> close() async {
+    if (_isDisposed) {
+      return null;
+    }
     final ids = _subscriptions.keys.toList();
     for (final subscriptionId in ids) {
       _unsubscribe(subscriptionId);
     }
     _subscriptions.clear();
+    await _dispose();
+    _isDisposed = true;
   }
 
   Future<T> _invokeMethod<T>(String method, [dynamic arguments]) =>
-      _channel.invokeMethod(method, arguments);
+      _channelRealm.invokeMethod(method, arguments);
 
   final Map<String, BehaviorSubject<List<Map>>> _subscriptions = {};
 
   Future<List> allObjects(String className) =>
       _invokeMethod('allObjects', {'\$': className});
 
-  Stream<List<Map>> subscribeAllObjects(String className) {
+  Stream<List<Map>> subscribeAllObjects(String className, {int limit = -1, String orderBy, bool ascending = true}) {
     final subscriptionId =
         'subscribeAllObjects:' + className + ':' + _uuid.v4();
 
@@ -99,12 +96,14 @@ class Realm {
     _invokeMethod('subscribeAllObjects', {
       '\$': className,
       'subscriptionId': subscriptionId,
+      'limit': limit,
+      'orderBy': orderBy, 'ascending': ascending
     });
 
     return controller;
   }
 
-  Stream<List> subscribeObjects(Query query) {
+  Stream<List> subscribeObjects(Query query, {int limit = -1, String orderBy, bool ascending = true}) {
     final subscriptionId =
         'subscribeObjects:' + query.className + ':' + _uuid.v4();
 
@@ -118,13 +117,17 @@ class Realm {
       '\$': query.className,
       'predicate': query._container,
       'subscriptionId': subscriptionId,
+      'limit': limit,
+      'orderBy': orderBy,
+      'ascending': ascending
     });
 
     return controller.stream;
   }
 
-  Future<List> objects(Query query) => _invokeMethod(
-      'objects', {'\$': query.className, 'predicate': query._container});
+  Future<List> objects(Query query, {int limit = -1, String orderBy, bool ascending = true}) => _invokeMethod(
+      'objects', {'\$': query.className, 'predicate': query._container, 'limit': limit,
+    'orderBy': orderBy, 'ascending': ascending});
 
   Future<Map> createObject(String className, Map<String, dynamic> object) =>
       _invokeMethod(
@@ -137,9 +140,9 @@ class Realm {
     _subscriptions[subscriptionId].close();
     _subscriptions.remove(subscriptionId);
 
-    _unsubscribing.add(subscriptionId);
+    _unSubscribing.add(subscriptionId);
     await _invokeMethod('unsubscribe', {'subscriptionId': subscriptionId});
-    _unsubscribing.remove(subscriptionId);
+    _unSubscribing.remove(subscriptionId);
   }
 
   Future<Map> update(String className,
@@ -195,6 +198,9 @@ class Query {
   Query contains(String field, String value) =>
       _pushThree('contains', field, value);
 
+  Query containsIgnoreCase(String field, String value) =>
+      _pushThree('contains(c)', field, value);
+
   Query notEqualTo(String field, dynamic value) =>
       _pushThree('notEqualTo', field, value);
 
@@ -212,19 +218,24 @@ class Query {
 
   Query or() => this.._pushOne('or');
 
+  Query isIn(String field, List value) => _pushThree('in', field, value);
+
   @override
   String toString() {
     return 'RealmQuery{className: $className, _container: $_container}';
   }
 }
 
-class Configuration {
+class RealmConfiguration {
   final String inMemoryIdentifier;
-  final String appId;
-  const Configuration({this.inMemoryIdentifier, this.appId});
+  final String realmId;
+  const RealmConfiguration({this.inMemoryIdentifier, this.realmId});
 
-  Map<String, String> toMap() =>
-      {'inMemoryIdentifier': inMemoryIdentifier, 'appId': appId};
+  Map<String, dynamic> toMap() => {
+        'inMemoryIdentifier': inMemoryIdentifier,
+        'realmId': realmId,
+      };
 
-  static const Configuration defaultConfiguration = const Configuration();
+  static const RealmConfiguration defaultRealmConfiguration =
+      const RealmConfiguration();
 }

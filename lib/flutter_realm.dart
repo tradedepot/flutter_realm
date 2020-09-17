@@ -14,4 +14,5 @@ part 'src/method_channel/method_channel_base.dart';
 part 'src/realm.dart';
 part 'src/auth.dart';
 part 'src/user.dart';
+part 'src/app.dart';
 

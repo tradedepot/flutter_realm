@@ -1,13 +1,17 @@
 package co.tradedepot.flutter_realm;
 
+import android.util.Log;
+
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
+import io.realm.Case;
 import io.realm.DynamicRealm;
 import io.realm.DynamicRealmObject;
 import io.realm.OrderedCollectionChangeSet;
@@ -18,13 +22,14 @@ import io.realm.RealmFieldType;
 import io.realm.RealmList;
 import io.realm.RealmQuery;
 import io.realm.RealmResults;
+import io.realm.Sort;
 import io.realm.mongodb.App;
 import io.realm.mongodb.AppConfiguration;
 
 class FlutterRealm {
+    private final static String TAG = "FlutterRealm";
     private final String realmId;
     private DynamicRealm realm;
-    private App app;
     private HashMap<String, RealmResults> subscriptions = new HashMap<>();
     private final MethodChannel channel;
 
@@ -40,15 +45,12 @@ class FlutterRealm {
             builder.inMemory().name(inMemoryIdentifier);
         }
         RealmConfiguration config = builder.build();
-
-        Realm.getInstance(config);
         realm = DynamicRealm.getInstance(config);
     }
 
     FlutterRealm(MethodChannel channel, String realmId, RealmConfiguration configuration) {
         this.channel = channel;
         this.realmId = realmId;
-        Realm.getInstance(configuration);
         realm = DynamicRealm.getInstance(configuration);
     }
 
@@ -135,8 +137,11 @@ class FlutterRealm {
                     String className = (String) arguments.get("$");
                     String subscriptionId = (String) arguments.get("subscriptionId");
                     List predicate = (List) arguments.get("predicate");
+                    int limit = (Integer) arguments.get("limit");
+                    String orderBy = (String) arguments.get("orderBy");
+                    Boolean ascending = (Boolean) arguments.get("ascending");
 
-                    RealmResults<DynamicRealmObject> subscription = getQuery(realm.where(className), predicate).findAllAsync();
+                    RealmResults<DynamicRealmObject> subscription = getQuery(realm.where(className), predicate, orderBy, ascending, limit).findAllAsync();
                     subscribe(subscriptionId, subscription);
 
                     result.success(null);
@@ -145,10 +150,12 @@ class FlutterRealm {
                 case "objects": {
                     String className = (String) arguments.get("$");
                     List predicate = (List) arguments.get("predicate");
-
-
-                    RealmResults<DynamicRealmObject> results = getQuery(realm.where(className), predicate).findAll();
+                    int limit = (Integer) arguments.get("limit");
+                    String orderBy = (String) arguments.get("orderBy");
+                    Boolean ascending = (Boolean) arguments.get("ascending");
+                    RealmResults<DynamicRealmObject> results = getQuery(realm.where(className), predicate, orderBy, ascending, limit).findAll();
                     List list = convert(results);
+                    Log.d(TAG, "GOT RESULTS: "+list);
                     result.success(list);
                     break;
                 }
@@ -205,7 +212,7 @@ class FlutterRealm {
         return object;
     }
 
-    private RealmQuery<DynamicRealmObject> getQuery(RealmQuery<DynamicRealmObject> query, List<List> predicate) throws Exception {
+    private RealmQuery<DynamicRealmObject> getQuery(RealmQuery<DynamicRealmObject> query, List<List> predicate, String orderBy, Boolean ascending, int limit) throws Exception {
         if (predicate == null) {
             return query;
         }
@@ -302,7 +309,23 @@ class FlutterRealm {
                         throw new Exception("Unsupported type");
                     }
                 }
+                case "contains(c)": {
+                    String fieldName = (String) item.get(1);
+                    Object argument = item.get(2);
+                    if (argument instanceof String) {
+                        result = result.contains(fieldName, (String) argument, Case.INSENSITIVE);
+                    } else {
+                        throw new Exception("Unsupported type");
+                    }
+                }
                 break;
+                case "in": {
+                    String fieldName = (String) item.get(1);
+                    Log.d(TAG, "Field Name: "+fieldName);
+                    List<String> argument = (List)item.get(2);
+                    Log.d(TAG, "Fields: "+argument);
+                    result = result.in(fieldName, argument.toArray(new String[0]));
+                }
                 case "and":
                     result = result.and();
                     break;
@@ -313,6 +336,12 @@ class FlutterRealm {
                     throw new Exception("Unknown operator");
             }
         }
+        if (orderBy != null && ascending != null) {
+            result = result.sort(orderBy, ascending ? Sort.ASCENDING : Sort.DESCENDING);
+        }
+        if (limit >= 0) {
+            result = result.limit(limit);
+        }
         return result;
     }
 
@@ -322,10 +351,14 @@ class FlutterRealm {
         }
 
         subscriptions.put(subscriptionId, subscription);
+        Log.d(TAG, "SUBSCRIBE START:"+subscriptionId);
         subscription.addChangeListener(new OrderedRealmCollectionChangeListener<RealmResults<DynamicRealmObject>>() {
             @Override
             public void onChange(RealmResults<DynamicRealmObject> results, OrderedCollectionChangeSet changeSet) {
+
+                Log.d(TAG, "GOT CHANGE FOR SUBSCRIPTION:"+subscriptionId);
                 List list = convert(results);
+                Log.d(TAG, "GOT RESULT:"+list);
                 Map<String, Object> map = new HashMap<>();
                 map.put("realmId", realmId);
                 map.put("subscriptionId", subscriptionId);
@@ -351,6 +384,11 @@ class FlutterRealm {
             if (object.getFieldType(fieldName) == RealmFieldType.INTEGER_LIST) {
                 Object value = object.getList(fieldName, Integer.class);
                 map.put(fieldName, value);
+                continue;
+            }
+            if (object.getFieldType(fieldName) == RealmFieldType.DATE) {
+                Date date = object.getDate(fieldName);
+                map.put(fieldName, date.getTime());
                 continue;
             }
             Object value = object.get(fieldName);
@@ -385,11 +423,15 @@ class FlutterRealm {
         return Collections.unmodifiableList(list);
     }
 
-    void reset() {
+    void dispose() {
         subscriptions.clear();
+        realm.close();
+    }
 
+    void reset() {
         realm.beginTransaction();
         realm.deleteAll();
         realm.commitTransaction();
+        dispose();
     }
 }

@@ -1,21 +1,16 @@
 part of flutter_realm;
 
-final MethodChannel _realmMethodChannel =
-    const MethodChannel('plugins.it_nomads.com/flutter_realm')
-      ..setMethodCallHandler(MethodChannelRealm._handleMethodCall);
 
 class MethodChannelRealm {
   final String realmId;
-  final MethodChannel _channel;
 
-  MethodChannelRealm(this.realmId, [MethodChannel channel])
-      : _channel = channel ?? _realmMethodChannel;
+  MethodChannelRealm(this.realmId);
 
   Stream<MethodCall> get methodCallStream =>
-      _methodCallController.stream.where(_equalRealmId);
+      BaseMethodChannel._methodCallController.stream.where(_equalRealmId);
 
   Future<T> invokeMethod<T>(String method, [Map arguments]) =>
-      _channel.invokeMethod<T>(method, _addRealmId(arguments));
+      _baseChannel.invokeMethod<T>(method, _addRealmId(arguments));
 
   Map _addRealmId(Map arguments) {
     final map = (arguments ?? {});
@@ -25,13 +20,5 @@ class MethodChannelRealm {
 
   bool _equalRealmId(MethodCall call) => call.arguments['realmId'] == realmId;
 
-  // ignore: close_sinks
-  static final _methodCallController = StreamController<MethodCall>.broadcast();
-
-  static Future<dynamic> _handleMethodCall(MethodCall call) {
-    _methodCallController.add(call);
-    return null;
-  }
-
-  static Future<void> reset() => _realmMethodChannel.invokeMethod('reset');
+  static Future<void> reset() => _baseChannel.invokeMethod('reset');
 }
