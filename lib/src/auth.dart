@@ -82,6 +82,6 @@ class RealmAuth {
   }
 
   Future<void> logOut() {
-    _channel.invokeMethod('logOut');
+    return _channel.invokeMethod('Auth#logOut');
   }
 }

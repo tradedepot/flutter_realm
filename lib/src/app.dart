@@ -81,16 +81,18 @@ class RealmApp {
   }
 
   Future<void> logOut() {
-    _channel.invokeMethod('logOut');
+    return _channel.invokeMethod('Auth#logOut');
   }
 
   Future<void> reset() {
     _channel.invokeMethod('reset');
     _authStateChangesListeners?.close();
+    return null;
   }
 
   Future<void> dispose() {
      _channel.invokeMethod('dispose');
     _authStateChangesListeners?.close();
+    return null;
   }
 }
