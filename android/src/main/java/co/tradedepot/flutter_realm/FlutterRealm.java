@@ -23,8 +23,6 @@ import io.realm.RealmList;
 import io.realm.RealmQuery;
 import io.realm.RealmResults;
 import io.realm.Sort;
-import io.realm.mongodb.App;
-import io.realm.mongodb.AppConfiguration;
 
 class FlutterRealm {
     private final static String TAG = "FlutterRealm";
